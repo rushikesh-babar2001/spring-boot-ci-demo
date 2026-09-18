@@ -1,0 +1,61 @@
+name: Docker Build -> Push -> Deploy
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Checkout source code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Setup Java 17
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      # 3. Build Spring Boot application
+      - name: Build Spring Boot application
+        run: ./mvnw clean package -DskipTests
+
+      # 4. Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 5. Build Docker image
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/spring-boot-app:latest .
+
+      # 6. Push Docker image to Docker Hub
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/spring-boot-app:latest
+
+      # 7. Deploy to AWS EC2
+      - name: Deploy to AWS EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/spring-boot-app:latest
+
+            docker stop spring-boot-app || true
+            docker rm spring-boot-app || true
+
+            docker run -d \
+              --name spring-boot-app \
+              -p 8080:8080 \
+              ${{ secrets.DOCKERHUB_USERNAME }}/spring-boot-app:latest
