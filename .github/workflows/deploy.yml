@@ -25,8 +25,40 @@ jobs:
       - name: Build Spring Boot application
         run: ./mvnw clean package -DskipTests
 
-      - name: Debug OIDC Token
-        uses: github/actions-oidc-debugger@main
+      - name: Debug GitHub OIDC Claims
+        env:
+          OIDC_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+          OIDC_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        run: |
+          RESPONSE=$(curl -sS \
+            -H "Authorization: Bearer $OIDC_REQUEST_TOKEN" \
+            "$OIDC_REQUEST_URL&audience=sts.amazonaws.com")
+
+          TOKEN=$(echo "$RESPONSE" | jq -r '.value')
+
+          python3 - "$TOKEN" <<'PY'
+          import sys
+          import json
+          import base64
+
+          token = sys.argv[1]
+          payload = token.split('.')[1]
+
+          padding = '=' * (-len(payload) % 4)
+          decoded = base64.urlsafe_b64decode(payload + padding)
+          claims = json.loads(decoded)
+
+          print("========== GitHub OIDC Claims ==========")
+          print("sub:", claims.get("sub"))
+          print("aud:", claims.get("aud"))
+          print("repository:", claims.get("repository"))
+          print("repository_owner:", claims.get("repository_owner"))
+          print("repository_id:", claims.get("repository_id"))
+          print("repository_owner_id:", claims.get("repository_owner_id"))
+          print("ref:", claims.get("ref"))
+          print("sha:", claims.get("sha"))
+          print("========================================")
+          PY
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
