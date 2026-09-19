@@ -25,6 +25,9 @@ jobs:
       - name: Build Spring Boot application
         run: ./mvnw clean package -DskipTests
 
+      - name: Debug OIDC Token
+        uses: github/actions-oidc-debugger@main
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
